@@ -16,7 +16,7 @@
 :root{
   --bg:#101214; --surface:#181b1f; --surface2:#21252a; --line:#2b3037; --ink:#f1f2f4; --ink2:#b6bdc5; --muted:#7d8690;
   --accent:#f2b53c; --accent-ink:#1b1405; --accent-text:#f2b53c; --done:#45c486; --done-bg:rgba(69,196,134,.14); --bad:#ef6b62;
-  --ghost:#59616b; --shadow:0 10px 30px rgba(0,0,0,.35);
+  --ghost:#59616b; --shadow:0 10px 30px rgba(0,0,0,.35); --c-legs:#f2b53c; --c-upper:#5b9be6;
   --f-num:"Barlow Condensed","Roboto Condensed","Arial Narrow",sans-serif;
   --f:"Barlow",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
   color-scheme:dark;
@@ -24,7 +24,7 @@
 @media (prefers-color-scheme:light){:root{
   --bg:#eceef1; --surface:#ffffff; --surface2:#f3f4f6; --line:#d9dde2; --ink:#121417; --ink2:#4a525b; --muted:#7a838d;
   --accent:#f2b53c; --accent-ink:#1b1405; --accent-text:#8f6200; --done:#1d8a55; --done-bg:rgba(29,138,85,.10); --bad:#c8372d;
-  --ghost:#a3abb4; --shadow:0 10px 30px rgba(20,30,40,.14); color-scheme:light}}
+  --ghost:#a3abb4; --shadow:0 10px 30px rgba(20,30,40,.14); --c-legs:#e0a020; --c-upper:#2a78d6; color-scheme:light}}
 *{box-sizing:border-box}
 html,body{margin:0;height:100%}
 body{background:var(--bg);color:var(--ink);font:16px/1.4 var(--f);-webkit-tap-highlight-color:transparent;overscroll-behavior-y:contain;-webkit-font-smoothing:antialiased}
@@ -114,6 +114,8 @@ label{display:flex;flex-direction:column;gap:5px;font-size:.82rem;color:var(--in
 .sheet.full>div{max-height:100%;height:100%;border-radius:0;padding-top:calc(14px + env(safe-area-inset-top,0px))}
 @keyframes up{from{transform:translateY(30px);opacity:.6}to{transform:none;opacity:1}}
 @keyframes fade{from{opacity:0}}
+.sheet>div>*{flex-shrink:0}
+.sheet .sticky{position:sticky;top:-14px;z-index:2;background:var(--bg);display:flex;flex-direction:column;gap:10px;padding:6px 0 8px;margin-top:-6px}
 .sheet .bar2{display:flex;align-items:center;gap:10px}
 .sheet .bar2 h2{flex:1}
 .x{background:none;border:0;font-size:1.6rem;color:var(--muted);padding:2px 8px;line-height:1}
@@ -161,6 +163,31 @@ td.num{font-family:var(--f-num);font-size:1rem}
 th{color:var(--muted);font-weight:600;font-size:.75rem;text-transform:uppercase;letter-spacing:.06em}
 .hero{padding:18px 16px}
 .hero p{margin:4px 0 0;color:var(--ink2)}
+.muscles{display:block;font-size:.75rem;color:var(--muted);font-weight:500;margin-top:1px}
+.coachline{font-size:.8rem;color:var(--ink2);background:color-mix(in srgb,var(--accent) 12%,transparent);border-radius:8px;padding:6px 8px}
+.coachline b{color:var(--accent-text);margin-right:6px;text-transform:uppercase;font-size:.7rem;letter-spacing:.08em}
+.coach{border-color:color-mix(in srgb,var(--accent) 45%,var(--line));display:flex;flex-direction:column;gap:6px}
+.coachnotes{margin:0;padding-left:18px;color:var(--ink2);font-size:.9rem;display:flex;flex-direction:column;gap:4px}
+.coachtg{display:flex;flex-direction:column;gap:4px;border-top:1px solid var(--line);padding-top:8px;font-size:.9rem}
+.coachtg .num{font-family:var(--f-num);font-size:1.05rem;font-weight:600}
+.chip.sm{padding:4px 10px;font-size:.78rem}
+.set.warm{min-height:40px;opacity:.85}
+.set.warm .n{color:var(--accent-text)}
+.set.warm .v{font-size:1.1rem}
+.wtog{border:1px solid var(--line);background:none;border-radius:6px;font:700 .9rem var(--f-num);color:var(--muted);min-height:32px}
+.wtog[aria-pressed="true"]{color:var(--accent-text);border-color:var(--accent)}
+.pe-sets{grid-template-columns:32px 1fr 1fr 32px 0}
+.wtag{font:700 .7rem var(--f);color:var(--accent-text);margin-left:6px}
+tr.warmrow td{color:var(--muted)}
+.exname{background:none;border:0;padding:0;font:inherit;color:inherit;text-align:left}
+.chart{display:flex;flex-direction:column;gap:8px}
+.svgchart{width:100%;height:auto;display:block}
+.svgchart .grid{stroke:var(--line);stroke-width:1}
+.svgchart .limit{stroke:var(--ink2);stroke-width:1.5;stroke-dasharray:5 4}
+.svgchart .ax{fill:var(--muted);font:500 10px var(--f)}
+.legend{display:flex;flex-wrap:wrap;gap:12px;font-size:.78rem;color:var(--ink2)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+.legend i.dash{height:3px;width:14px;vertical-align:2px}
 @media (max-width:380px){.stats{grid-template-columns:repeat(2,1fr)}}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
