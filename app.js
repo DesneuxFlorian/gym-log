@@ -897,6 +897,8 @@ function renderSettings() {
 }
 
 /* ---------- boot ---------- */
+// one-time: mark warm-ups in FitNotes history pulled before warm-up support existed
+if (!load('gl.mig.warm', false)) { for (const s of sessions) if (s.source === 'fitnotes' && !s.sets.some(x => x.warm)) inferWarmups(s.sets); persist(); save('gl.mig.warm', true); }
 if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
 render();
 syncAll();
