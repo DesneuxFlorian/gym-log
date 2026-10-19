@@ -1,7 +1,7 @@
 'use strict';
-/* Gym Log — offline-first strength logger.
+/* Gym Log — offline-first strength logger, plus the Run tab (run.js) for the 10K plan.
    Sessions and plans live in localStorage and sync to a private GitHub repo:
-   one JSON file per session in sessions/, all plans in plans.json. */
+   one JSON file per session in sessions/, all plans in plans.json, the running plan in running/. */
 
 const $ = s => document.querySelector(s);
 const h = (tag, attrs = {}, ...kids) => {
@@ -148,19 +148,22 @@ function exHistory(ex, n = 8) {
 const e1rm = (w, r) => (w > 0 && r > 0 && r <= 15) ? w * (1 + r / 30) : 0;
 
 /* ---------- navigation ---------- */
-let view = 'today';
+const VIEWS = ['run', 'today', 'plans', 'history', 'settings'];
+let view = active ? 'today' : (VIEWS.includes(load('gl.view', 'today')) ? load('gl.view', 'today') : 'today');
 function go(v) {
-  view = v;
-  for (const id of ['today', 'plans', 'history', 'settings']) { const b = $('#nav-' + id); if (id === v) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); }
+  view = v; save('gl.view', v);
   render(); $('#main').scrollTop = 0;
+  if (v === 'run' && ghReady() && Date.now() - RT.lastPulled() > 120000) syncAll();
 }
-for (const id of ['today', 'plans', 'history', 'settings']) $('#nav-' + id).onclick = () => go(id);
+for (const id of VIEWS) $('#nav-' + id).onclick = () => go(id);
 $('#sync').onclick = () => go('settings');
 
 function render() {
   const m = $('#main'); const y = m.scrollTop; m.innerHTML = '';
-  $('#title').textContent = view === 'today' && active ? (active.planName || 'Session') : 'Gym Log';
-  if (view === 'today') m.append(active ? renderSession() : renderIdle());
+  for (const id of VIEWS) { const b = $('#nav-' + id); if (id === view) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); }
+  $('#title').textContent = view === 'today' && active ? (active.planName || 'Session') : view === 'run' ? 'Run · sub-45' : 'Gym Log';
+  if (view === 'run') m.append(RT.render());
+  else if (view === 'today') m.append(active ? renderSession() : renderIdle());
   else if (view === 'plans') m.append(renderPlans());
   else if (view === 'history') m.append(renderHistory());
   else m.append(renderSettings());
@@ -445,8 +448,8 @@ function finishSheet() {
 }
 
 /* ---------- sheets ---------- */
-function sheet(title, build, { full = false } = {}) {
-  const wrap = h('div', { class: 'sheet' + (full ? ' full' : ''), role: 'dialog', 'aria-modal': 'true', 'aria-label': title });
+function sheet(title, build, { full = false, top = false } = {}) {
+  const wrap = h('div', { class: 'sheet' + (full ? ' full' : '') + (top ? ' top' : ''), role: 'dialog', 'aria-modal': 'true', 'aria-label': title });
   const close = () => { wrap.remove(); document.removeEventListener('keydown', esc); };
   const esc = e => { if (e.key === 'Escape') close(); };
   const inner = h('div', {}, h('div', { class: 'bar2' }, h('h2', { text: title }), h('button', { class: 'x', 'aria-label': 'Close', onclick: close }, '×')));
@@ -688,13 +691,13 @@ function sessionRow(s) {
 function renderHistory() {
   const box = h('div', { class: 'stack' }, weekSummary(), trendsCard(),
     h('button', { class: 'btn block', onclick: () => pickerSheet(progressSheet) }, 'Exercise progress charts'));
-  const xs = allSessions();
-  if (!xs.length) box.append(h('p', { class: 'muted', text: 'No sessions yet. Pull your history from GitHub in Settings.' }));
+  const items = allSessions().map(s => ({ key: s.start, s })).concat(RT.historyItems()).sort((a, b) => b.key.localeCompare(a.key));
+  if (!items.length) box.append(h('p', { class: 'muted', text: 'No sessions yet. Pull your history from GitHub in Settings.' }));
   let month = '';
-  for (const s of xs.slice(0, 200)) {
-    const m = s.start.slice(0, 7);
+  for (const it of items.slice(0, 250)) {
+    const m = it.key.slice(0, 7);
     if (m !== month) { month = m; box.append(h('div', { class: 'eyebrow', style: 'margin-top:6px', text: new Date(m + '-15').toLocaleDateString(undefined, { month: 'long', year: 'numeric' }) })); }
-    box.append(sessionRow(s));
+    box.append(it.s ? sessionRow(it.s) : it.el);
   }
   return box;
 }
@@ -704,6 +707,7 @@ function sessionSheet(s) {
     h('div', { class: 'muted small', text: [s.planName, s.durationMin && s.durationMin + ' min', s.rpe && 'RPE ' + s.rpe, s.load && 'load ' + s.load].filter(Boolean).join(' · ') }),
     pains.length ? h('div', { class: 'small', style: 'color:var(--bad);font-weight:600', text: 'Pain: ' + pains.map(([a, v]) => `${a} ${v}/10`).join(', ') }) : null,
     s.note ? h('p', { style: 'margin:0', text: s.note }) : null,
+    h('button', { class: 'btn primary', onclick: () => promptSheet('Review this workout', gymReviewPrompt(s), { what: (s.planName ? s.planName + ' · ' : '') + fmtDate(s.start) }) }, 'Review this workout'),
     h('div', { style: 'overflow-x:auto' }, h('table', {}, h('thead', {}, h('tr', {}, h('th', { text: 'Exercise' }), h('th', { text: 'kg' }), h('th', { text: 'Reps' }), h('th', { text: 'Rest' }))),
       h('tbody', {}, s.sets.map(x => h('tr', { class: x.warm ? 'warmrow' : null }, h('td', {}, x.ex, x.warm ? h('span', { class: 'wtag', text: 'W' }) : null, x.note ? h('div', { class: 'muted tiny', text: x.note }) : null), h('td', { class: 'num', text: fmtW(x.w) }), h('td', { class: 'num', text: String(x.r) }), h('td', { class: 'num muted', text: x.restActual ? mmss(x.restActual) : '' })))))),
     h('button', { class: 'btn', onclick: () => { close(); planEditor(planFromSession(s), true); } }, 'Save as plan'),
@@ -718,6 +722,64 @@ function confirmDelete(s, closeParent) {
       sessions = sessions.filter(x => x.id !== s.id); queue = queue.filter(x => x !== s.id); persist(); close(); closeParent(); render(); toast('Session deleted');
     } }, 'Delete'),
     h('button', { class: 'btn', onclick: close }, 'Cancel')]);
+}
+
+/* ---------- review prompts for Claude ---------- */
+/* The app can't talk to Claude itself, so "Review this workout" builds a structured prompt with the workout
+   data and hands it to the Claude app (share sheet on the phone), Claude on the web, or the clipboard. */
+function promptSheet(title, prompt, { what = '' } = {}) {
+  const pre = h('pre', { class: 'prompt', text: prompt });
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(prompt); toast('Prompt copied. Paste it in Claude'); }
+    catch { const r = document.createRange(); r.selectNodeContents(pre); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); pre.closest('details').open = true; toast('Copy the selected text'); }
+  };
+  const web = 'https://claude.ai/new?q=' + encodeURIComponent(prompt.slice(0, 12000));
+  const canShare = typeof navigator.share === 'function';
+  sheet(title, () => [
+    what ? h('div', { class: 'muted small', text: what }) : null,
+    h('p', { class: 'small', style: 'margin:0;color:var(--ink2)', text: 'The prompt carries the workout data and asks Claude for a structured review. Send it, then talk it through in that conversation.' }),
+    canShare ? h('button', { class: 'btn primary block', onclick: async () => { try { await navigator.share({ text: prompt }); } catch (e) { if (!e || e.name !== 'AbortError') copy(); } } }, 'Send to the Claude app') : null,
+    h('a', { class: 'btn block' + (canShare ? '' : ' primary'), href: web, target: '_blank', rel: 'noopener' }, 'Open in Claude on the web'),
+    canShare ? null : h('a', { class: 'btn block', href: web.replace('https://', 'claude://') }, 'Open in the Claude desktop app'),
+    h('button', { class: 'btn block', onclick: copy }, 'Copy prompt'),
+    h('details', {}, h('summary', { class: 'small muted', text: `See the prompt · ${prompt.length} characters` }), pre)
+  ], { top: true });
+}
+function gymReviewPrompt(s) {
+  const L = [], day = s.start.slice(0, 10);
+  L.push('Review this gym session from my Gym Log app.', '');
+  L.push(`SESSION ${s.id} · ${fmtDate(s.start)}${s.planName ? ` · plan "${s.planName}"` : ''}${s.source === 'fitnotes' ? ' · imported from FitNotes' : ''}`);
+  L.push([s.durationMin && `${s.durationMin} min`, s.rpe && `session RPE ${s.rpe}`, s.load && `load ${s.load}`].filter(Boolean).join(' · ') || 'No duration or session RPE recorded.');
+  const pains = Object.entries(s.pain || {});
+  L.push(pains.length ? 'Pain check (0–10): ' + pains.map(([a, v]) => `${a} ${v}`).join(', ') : 'Pain check: not recorded.');
+  if (s.note) L.push(`My notes: ${s.note}`);
+  L.push('', 'SETS (kg×reps · W = warm-up · [actual rest before the set])');
+  const byEx = new Map(); for (const x of s.sets) { if (!byEx.has(x.ex)) byEx.set(x.ex, []); byEx.get(x.ex).push(x); }
+  for (const [ex, xs] of byEx) {
+    L.push(`- ${ex} (${musclesOf(ex, xs[0].cat).join('/')}): ${xs.map(x => (x.warm ? 'W ' : '') + setLabel(x) + (x.restActual ? ` [${mmss(x.restActual)}]` : '') + (x.note ? ` (${x.note})` : '')).join(', ')}`);
+    const lt = lastTime(ex, s.start);
+    if (lt) L.push(`  last time ${shortDate(lt.s.start)}: ${(work(lt.sets).length ? work(lt.sets) : lt.sets).map(setLabel).join(', ')}${lt.s.rpe ? ` (session RPE ${lt.s.rpe})` : ''}`);
+  }
+  const short = (s.planned || []).filter(p => p.done < p.planned);
+  if (short.length) L.push('Planned sets not done: ' + short.map(p => `${p.ex} ${p.done}/${p.planned}`).join(', '));
+  L.push('', 'CONTEXT');
+  const wk = mondayOf(new Date(day + 'T12:00'));
+  if (coach && coach.week === wk) {
+    L.push(`- Coach plan, week of ${coach.week}: ${coach.headline || ''}${coach.limits && coach.limits.legSets ? ` · leg working sets ≤ ${coach.limits.legSets}` : ''}`);
+    const tg = Object.entries(coach.targets || {});
+    if (tg.length) L.push('- Targets: ' + tg.map(([ex, v]) => `${ex} ${work(v.sets || []).map(setLabel).join(', ')}`).join(' · '));
+  }
+  const a = new Date(wk + 'T00:00'), b = new Date(a.getTime() + 7 * 864e5);
+  const ws = sessions.filter(x => { const d = new Date(x.start.length === 10 ? x.start + 'T12:00' : x.start); return d >= a && d < b; });
+  L.push(`- That week in the gym: ${ws.length} session${ws.length === 1 ? '' : 's'}, ${ws.reduce((n, x) => n + work(x.sets).filter(isLeg).length, 0)} leg working sets (${ws.reduce((n, x) => n + work(x.sets).filter(isHam).length, 0)} hamstring-led).`);
+  const run = RT.weekRunsFor(day); if (run) L.push('- ' + run);
+  L.push('', 'WHAT I WANT');
+  L.push('1. A 1–2 sentence verdict.');
+  L.push('2. Did I hit the targets and stay within the leg-set limit? Compare each main lift with last time (weight, reps, rest, effort).');
+  L.push('3. Hamstring check: read the pain scores and notes, and say if anything should change before my next key run.');
+  L.push('4. One concrete change for the next session.');
+  L.push('My full history is in my private repo DesneuxFlorian/gym-data (sessions/*.json, scripts/weekly_summary.py) if you need more. Keep it short: I read on my phone.');
+  return L.join('\n');
 }
 
 /* ---------- GitHub sync ---------- */
@@ -772,6 +834,7 @@ async function syncAll() {
     }
     plansChanged = await syncPlans();
     if (await pullCoach() && view === 'today' && !active) render();
+    await RT.sync();
   } catch (e) { syncErr = e.message; }
   syncing = false; renderSync();
   if (view === 'history' || (plansChanged && (view === 'plans' || (view === 'today' && !active)))) render();
@@ -790,7 +853,7 @@ async function pullHistory(btn) {
       try { const s = JSON.parse(txt); s.synced = true; sessions.push(s); } catch {}
       btn.textContent = `Downloaded ${++done}`; } };
     await Promise.all([worker(), worker(), worker(), worker()]);
-    await syncPlans(); await pullCoach();
+    await syncPlans(); await pullCoach(); await RT.sync();
     persist(); toast(`Pulled ${done} sessions and ${livePlans().length} plans`);
   } catch (e) { toast('Pull failed: ' + e.message); }
   btn.disabled = false; btn.textContent = 'Pull history from GitHub';
@@ -800,7 +863,7 @@ function renderSync() {
   if (!ghReady()) { dot.className = 'dot'; t.textContent = 'not connected'; return; }
   if (syncing) { dot.className = 'dot pend'; t.textContent = 'syncing…'; return; }
   if (syncErr) { dot.className = 'dot err'; t.textContent = 'sync failed'; return; }
-  const n = queue.length + (plansDirty ? 1 : 0);
+  const n = queue.length + (plansDirty ? 1 : 0) + RT.pendingCount();
   if (n) { dot.className = 'dot pend'; t.textContent = n + ' waiting'; return; }
   dot.className = 'dot ok'; t.textContent = 'synced';
 }
@@ -875,7 +938,7 @@ function renderSettings() {
   };
   return h('div', { class: 'stack' },
     h('div', { class: 'card stack' }, h('h2', { text: 'GitHub storage' }),
-      h('p', { class: 'muted small', style: 'margin:0', text: 'Each finished session is saved as one JSON file in this repository, and your plans in plans.json. The token stays on this phone.' }),
+      h('p', { class: 'muted small', style: 'margin:0', text: 'Each finished session is saved as one JSON file in this repository, your plans in plans.json and the running plan and runs in running/. The token stays on this phone.' }),
       f('owner', 'Account'), f('repo', 'Repository'), f('branch', 'Branch'), f('folder', 'Folder'),
       f('token', 'Access token', { type: 'password' }),
       h('button', { class: 'btn primary block', onclick: async () => {
