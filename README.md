@@ -8,5 +8,7 @@ A small offline-first strength logger in the spirit of FitNotes. It runs as a we
 - At the end: duration, session effort (RPE 1–10) and a 0–10 pain check per body area
 - Works offline; sessions upload when the phone is back online
 - Import a FitNotes CSV, export everything as CSV in the FitNotes format
+- Run tab: a running-plan tracker (race estimate, weekly load and ACWR, plan with live pace targets, change log). Runs, plan and fitness live in `running/` of the data repository; COROS runs are added there by a scheduled Claude task
+- "Review this workout" on every run and gym session: builds a structured prompt with the session, laps, earlier comparable sessions and the week's load, and hands it to Claude (share sheet, claude.ai or the desktop app, or copy)
 
 No data is stored in this repository. The GitHub token lives only in the phone's browser storage.
